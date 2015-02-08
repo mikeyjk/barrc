@@ -2,172 +2,177 @@ using System;
 using System.IO; // read RC files
 using System.Diagnostics; // launch executables
 using System.Collections.Generic; // List<>
-using System.Threading.Tasks;
 
 namespace BarUtil
 {
   /**
-   *  Wrapper class for BAR.
-   *  This program intends to:
-   *     1) Read a bar configuration file.
-   *	   2) Read a script configuration file.
-   * p1: 3) Execute bar based on config.
-   * p2: 4) Execute scripts based on config.
-   * p3: 5) Respond to cli queries.
+   *  'barrc'
+   *     1) Read 'barrc' configuration file.
+   *	   2) Read 'scriptrc' configuration file.
+   *     3) Execute bar based on config as seperate process.
+   *     4) Execute scripts based on config as seperate processes.
+   *     5) Respond to cli queries as seperate process.
    *
-   *	-c configFilePath/barrc
-   *	-h
-   *	-v
+   *	-c 'config_path/'
+   *	-h print help
+   *	-v debug output
    *	-l list currently running scripts
-   * */
+   *	TODO: edit running command arguments?
+   *	TODO: case insensitivity
+   */
   class BarRc
   {
-    private string m_bConfPath =
-      Environment.GetEnvironmentVariable("HOME") + "/.config/bar/barrc";
+    // default rc file path
+    private string m_barrcPath =
+      Environment.GetEnvironmentVariable("HOME") + "/.config/bar/.barrc";
+    private string m_scriptrcPath =
+      Environment.GetEnvironmentVariable("HOME") + "/.config/bar/.scriptrc";
 
-    private string m_sConfPath =
-      Environment.GetEnvironmentVariable("HOME") + "/.config/bar/scriptrc";
+    private int m_maxBars = 4; // TODO: determine max bars from rc
+    private bool m_debug = false; // -v output
 
-    // maximum number of bars
-    private int m_maxBars = 4;
-    private bool m_exit = false;
-    private bool m_debug = false;
     private List<Bar> m_bars = null;
     private List<Script> m_scripts = null;
 
-    // process a line of the bar config
+    // TODO: EOF instead, determine bar num from this
+    // process each line of the bar config
     public void parseBarLine(int barNum, string line)
     {
       for(int i = 0; i < m_bars.Count; ++i)
       {
         if(m_bars[i].m_number == barNum)
         {
-          if(line.Contains("Geometery:"))
+          if(line.Contains("Geometery="))
           {
-            string[] toke = line.Split(':');
+            string[] toke = line.Split('=', '#');
 
-            // it is expected to be the 2nd token
-            // make sure it isn't null before accessing
-            if(toke[1] != null && !String.IsNullOrEmpty(toke[1]))
+            if(!string.IsNullOrEmpty(toke[1]))
             {
               m_bars[i].m_geometery = toke[1].Trim();
             }
+
             // else // missing or invalid data
-            // not providing a value shouldn't necessarily
-            // raise an error
+            // TODO: raise an erorr? only on debug?
           }
 
-          if(line.Contains("Position:"))
+          if(line.Contains("Position="))
           {
-            string[] toke = line.Split(':');
+            string[] toke = line.Split('=', '#');
 
-            if(toke[1] != null && !String.IsNullOrEmpty(toke[1]))
+            if(!string.IsNullOrEmpty(toke[1]))
             {
               if(toke[1].Contains("Top"))
               {
-                m_bars[i].m_dockBottom = false;
+                m_bars[i].m_top = true;
               }
               else if(toke[1].Contains("Bottom"))
               {
-                m_bars[i].m_dockBottom = true;
+                m_bars[i].m_top = false;
               }
             }
           }
 
-          if(line.Contains("ForceDock:"))
+          if(line.Contains("ForceDock="))
           {
-            string[] toke = line.Split(':');
+            string[] toke = line.Split('=', '#');
 
-            if(toke[1] != null && !String.IsNullOrEmpty(toke[1]))
+            if(!string.IsNullOrEmpty(toke[1]))
             {
               m_bars[i].m_forceDock = Convert.ToBoolean(toke[1]);
             }
           }
 
-          if(line.Contains("Permanent:"))
+          if(line.Contains("Permanent="))
           {
-            string[] toke = line.Split(':');
+            string[] toke = line.Split('=', '#');
 
-            if(toke[1] != null && !String.IsNullOrEmpty(toke[1]))
+            if(!string.IsNullOrEmpty(toke[1]))
             {
               m_bars[i].m_permanent = Convert.ToBoolean(toke[1]);
             }
           }
 
-          if(line.Contains("FIFO:"))
+          if(line.Contains("FIFO="))
           {
-            string[] toke = line.Split(':');
+            string[] toke = line.Split('=', '#');
 
-            if(toke[1] != null && !String.IsNullOrEmpty(toke[1]))
+            if(!string.IsNullOrEmpty(toke[1]))
             {
               m_bars[i].m_fifo = toke[1].Trim();
             }
           }
 
-          if(line.Contains("Sdir:"))
+          if(line.Contains("Monitor="))
           {
-            string[] toke = line.Split(':');
+            string[] toke = line.Split('=', '#');
 
-            if(toke[1] != null && !String.IsNullOrEmpty(toke[1]))
+            if(!string.IsNullOrEmpty(toke[1]))
             {
               int temp = 1;
 
               if(Int32.TryParse(toke[1].Trim(), out temp))
               {
-                m_bars[i].m_sDir = temp;
+                m_bars[i].m_renderMonitor = temp;
               }
               else
               {
-                m_bars[i].m_sDir = 1;
+                m_bars[i].m_renderMonitor = 1;
               }
             }
           }
 
-          if(line.Contains("Font1:"))
+          if(line.Contains("FontOne="))
           {
-            string[] toke = line.Split(':');
+            string[] toke = line.Split('=', '#');
 
-            if(toke[1] != null && !String.IsNullOrEmpty(toke[1]))
+            if(!string.IsNullOrEmpty(toke[1]))
             {
               m_bars[i].m_fontOne = toke[1].Trim();
             }
           }
 
-          if(line.Contains("Font2:"))
+          if(line.Contains("FontTwo="))
           {
-            string[] toke = line.Split(':');
+            string[] toke = line.Split('=', '#');
 
-            if(toke[1] != null && !String.IsNullOrEmpty(toke[1]))
+            if(!string.IsNullOrEmpty(toke[1]))
             {
               m_bars[i].m_fontTwo = toke[1].Trim();
             }
           }
 
-          if(line.Contains("ULWidth:"))
+          if(line.Contains("ULWidth="))
           {
-            string[] toke = line.Split(':');
+            string[] toke = line.Split('=', '#');
 
-            if(toke[1] != null && !String.IsNullOrEmpty(toke[1]))
+            if(!string.IsNullOrEmpty(toke[1]))
             {
-              m_bars[i].m_underlineWidth = Convert.ToInt16(toke[1]);
+              // TODO: make this less of a POS lel
+              try {
+                m_bars[i].m_underlineWidth = Convert.ToInt16(toke[1]);
+              }
+              catch (Exception e) {
+                // silent
+                Console.WriteLine("Exception with ulwidth: " + e.Message);
+              }
             }
           }
 
-          if(line.Contains("BColor:"))
+          if(line.Contains("BColor="))
           {
-            string[] toke = line.Split(':');
+            string[] toke = line.Split('=', '#');
 
-            if(toke[1] != null && !String.IsNullOrEmpty(toke[1]))
+            if(toke[1] != null && !string.IsNullOrEmpty(toke[1]))
             {
               m_bars[i].m_bgColor = toke[1].Trim();
             }
           }
 
-          if(line.Contains("FColor:"))
+          if(line.Contains("FColor="))
           {
-            string[] toke = line.Split(':');
+            string[] toke = line.Split('=', '#');
 
-            if(toke[1] != null && !String.IsNullOrEmpty(toke[1]))
+            if(!string.IsNullOrEmpty(toke[1]))
             {
               m_bars[i].m_fgColor = toke[1].Trim();
             }
@@ -186,32 +191,33 @@ namespace BarUtil
       List<int> barNums = new List<int>();
       m_bars = new List<Bar>();
 
-      if(m_debug) // verbose output
+      if(m_debug)
       {
-        Console.WriteLine("Attempting to open file: " + m_bConfPath);
+        Console.WriteLine("Attempting to open file: " + m_barrcPath);
       }
 
       try // try and open file
       {
         // open file stream for reading
-        StreamReader reader = new StreamReader(m_bConfPath);
+        StreamReader reader = new StreamReader(m_barrcPath);
 
         if(m_debug)
         {
-          Console.WriteLine(m_bConfPath + " opened.");
+          Console.WriteLine(m_barrcPath + " opened.");
         }
 
-        string line = null;
+        string line = reader.ReadLine();
 
+        // TODO: do we need this?
         // while ! EOF read each line
-        while((line = reader.ReadLine()) != null)
+        while(line != null)
         {
           // for the maximum amount of bars
           for(int barNum = 1; barNum < m_maxBars + 1; ++barNum)
           {
             // if the line contains a bar reference
             // bar reference is in the format 'n*'
-            if(line.Contains(barNum.ToString() + '*'))
+            if(line.Contains(barNum.ToString()))
             {
               // assume it is a new bar reference
               bool isNew = true;
@@ -246,11 +252,14 @@ namespace BarUtil
               parseBarLine(barNum, line);
             }
           }
+
+          line = reader.ReadLine();
         }
       }
       catch(Exception err)
       {
-        Console.WriteLine(err.Message + ".");
+        // this one
+        Console.WriteLine("Exception: " + err.Message);
       }
     }
 
@@ -280,7 +289,7 @@ namespace BarUtil
 
             // it is expected to be the 2nd token
             // make sure it isn't null before accessing
-            if(toke[1] != null && !String.IsNullOrEmpty(toke[1]))
+            if(toke[1] != null && !string.IsNullOrEmpty(toke[1]))
             {
               m_scripts[i].m_name = toke[1].Trim();
             }
@@ -293,7 +302,7 @@ namespace BarUtil
           {
             string[] toke = line.Split(':');
 
-            if(toke[1] != null && !String.IsNullOrEmpty(toke[1]))
+            if(toke[1] != null && !string.IsNullOrEmpty(toke[1]))
             {
               m_scripts[i].m_path = toke[1].Trim();
             }
@@ -303,7 +312,7 @@ namespace BarUtil
           {
             string[] toke = line.Split(':');
 
-            if(toke[1] != null && !String.IsNullOrEmpty(toke[1]))
+            if(toke[1] != null && !string.IsNullOrEmpty(toke[1]))
             {
               m_scripts[i].m_arguments = toke[1].Trim();
             }
@@ -313,7 +322,7 @@ namespace BarUtil
           {
             string[] toke = line.Split(':');
 
-            if(toke[1] != null && !String.IsNullOrEmpty(toke[1]))
+            if(toke[1] != null && !string.IsNullOrEmpty(toke[1]))
             {
               m_scripts[i].m_poll = Convert.ToBoolean(toke[1]);
             }
@@ -323,7 +332,7 @@ namespace BarUtil
           {
             string[] toke = line.Split(':');
 
-            if(toke[1] != null && !String.IsNullOrEmpty(toke[1]))
+            if(toke[1] != null && !string.IsNullOrEmpty(toke[1]))
             {
               m_scripts[i].m_frequency = toke[1].Trim();
             }
@@ -341,17 +350,17 @@ namespace BarUtil
 
       if(m_debug) // verbose output
       {
-        Console.WriteLine("Attempting to open file: " + m_sConfPath);
+        Console.WriteLine("Attempting to open file: " + m_scriptrcPath);
       }
 
       try // try and open file
       {
         // open file stream for reading
-        StreamReader reader = new StreamReader(m_sConfPath);
+        StreamReader reader = new StreamReader(m_scriptrcPath);
 
         if(m_debug)
         {
-          Console.WriteLine(m_sConfPath + " opened.");
+          Console.WriteLine(m_scriptrcPath + " opened.");
         }
 
         string line = null;
@@ -374,7 +383,7 @@ namespace BarUtil
       }
       catch(Exception err)
       {
-        Console.WriteLine(err.Message + ".");
+        Console.WriteLine("Exception: " + err.Message);
       }
     }
 
@@ -392,7 +401,7 @@ namespace BarUtil
         }
         else if(args[i].Contains("-c"))
         {
-          m_bConfPath = args[i + 1];
+          m_barrcPath = args[i + 1];
         }
         else
         {
@@ -419,9 +428,9 @@ namespace BarUtil
       barrc.handleArgs(args);
 
       // if the config file cannot be found
-      if(!File.Exists(barrc.m_bConfPath))
+      if(!File.Exists(barrc.m_barrcPath))
       {
-        Console.WriteLine("Cannot locate bar config: " + barrc.m_bConfPath);
+        Console.WriteLine("Cannot locate bar config: " + barrc.m_barrcPath);
         throw new FileNotFoundException();
       }
       else // rc located successfully
