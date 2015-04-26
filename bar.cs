@@ -47,8 +47,6 @@ namespace BarUtil
       m_process.StartInfo.RedirectStandardOutput = true;
       m_process.StartInfo.FileName = "bash";
       m_process.StartInfo.Arguments = query;
-      Console.WriteLine(m_process.StartInfo.Arguments);
-
       m_process.Start();
     }
 
@@ -71,14 +69,16 @@ namespace BarUtil
 
       if (!string.IsNullOrEmpty(m_fontOne))
       {
-        m_args += " -f " + "'" + m_fontOne + "'";
+        m_args += " -f " + "'" + m_fontOne.Trim();
 
         // we only handle a secondary font
         // if a primary font is provided
         if (!string.IsNullOrEmpty(m_fontTwo))
         {
-          m_args += ", " + "'" + m_fontTwo + "'";
+          m_args += ", " + m_fontTwo.Trim();
         }
+
+        m_args += "'";
       }
 
       if (m_underlineWidth > 1) // TODO: verify default

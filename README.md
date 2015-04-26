@@ -1,12 +1,11 @@
 'barrc'
 
-The intention here is to have configuration files describing what arguments to provide to bar.
-It intends to have features such as automatic handling of using named pipes (common way of using bar).
+Intends to replace the need for writing bash scripts manually to customise bar.
 
-I chose C# because I wanted a really simple intro to the language prior to my final semester of university.
-Bash is probably more appropriate.
-This application requires the Mono C# application and compiler.
+C# because I wanted a simple introduction to the language prior to my final semester of university.
+Bash or C would be more appropriate languages, mono is a dependency of this, which most users will have no need for.
+Eventually I might create a branch with a C/sh implementation if I find the time :P.
 
-This is incredibly rough around the edges and currently I wouldn't recommend anyone uses it.
+This is a WIP, is basically broken at the moment and isn't really recommended.
 
-It reads from ~/.config/barrc/barrc , to determine the number of bars, if there is a named pipe to read from, what fonts and colors to be used etc. Haven't added the handling of geometry yet.
+I'll commit an example barrc and scriptrc until I can find the time to docment it in the wiki.

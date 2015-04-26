@@ -19,16 +19,22 @@ namespace BarUtil
    *	-l list currently running scripts
    *	TODO: edit running command arguments?
    *	TODO: case insensitivity
+   *	TODO: close old instances, 'trap' command replication
+   *	create fifos / delete old ones, subscribe bspc to a fifo,
+   *	run scripts to particular fifos
+   *
+   *	TODO: interpret FIFO input and pass to bar with formatting
+   *	allow the formatting to be defined in config file
+   *	(inside the script config?) (use what defaults?)
    */
   class BarRc
   {
     // default rc file path
     private string m_barrcPath =
-      Environment.GetEnvironmentVariable("HOME") + "/.config/bar/.barrc";
+      Environment.GetEnvironmentVariable("HOME") + "/.config/bar/barrc";
     private string m_scriptrcPath =
-      Environment.GetEnvironmentVariable("HOME") + "/.config/bar/.scriptrc";
+      Environment.GetEnvironmentVariable("HOME") + "/.config/bar/scriptrc";
 
-    private int m_maxBars = 4; // TODO: determine max bars from rc
     private bool m_debug = false; // -v output
 
     private List<Bar> m_bars = null;
@@ -131,6 +137,7 @@ namespace BarUtil
             }
           }
 
+          /* TODO: unbreak
           if(line.Contains("FontTwo="))
           {
             string[] toke = line.Split('=', '#');
@@ -138,8 +145,9 @@ namespace BarUtil
             if(!string.IsNullOrEmpty(toke[1]))
             {
               m_bars[i].m_fontTwo = toke[1].Trim();
+              Console.WriteLine("f2: " + m_bars[i].m_fontTwo);
             }
-          }
+          }*/
 
           if(line.Contains("ULWidth="))
           {
@@ -151,9 +159,8 @@ namespace BarUtil
               try {
                 m_bars[i].m_underlineWidth = Convert.ToInt16(toke[1]);
               }
-              catch (Exception e) {
+              catch (Exception) {
                 // silent
-                Console.WriteLine("Exception with ulwidth: " + e.Message);
               }
             }
           }
@@ -162,9 +169,9 @@ namespace BarUtil
           {
             string[] toke = line.Split('=', '#');
 
-            if(toke[1] != null && !string.IsNullOrEmpty(toke[1]))
+            if(!string.IsNullOrEmpty(toke[1]))
             {
-              m_bars[i].m_bgColor = toke[1].Trim();
+              m_bars[i].m_bgColor = '#' + toke[1].Trim();
             }
           }
 
@@ -174,7 +181,7 @@ namespace BarUtil
 
             if(!string.IsNullOrEmpty(toke[1]))
             {
-              m_bars[i].m_fgColor = toke[1].Trim();
+              m_bars[i].m_fgColor = '#' + toke[1].Trim();
             }
           }
         }
@@ -191,66 +198,65 @@ namespace BarUtil
       List<int> barNums = new List<int>();
       m_bars = new List<Bar>();
 
-      if(m_debug)
-      {
-        Console.WriteLine("Attempting to open file: " + m_barrcPath);
-      }
-
       try // try and open file
       {
-        // open file stream for reading
+        if(m_debug)
+        {
+          Console.WriteLine("Attempting to open file: " + m_barrcPath);
+        }
+
         StreamReader reader = new StreamReader(m_barrcPath);
+        string line = reader.ReadLine();
 
         if(m_debug)
         {
           Console.WriteLine(m_barrcPath + " opened.");
         }
 
-        string line = reader.ReadLine();
-
-        // TODO: do we need this?
-        // while ! EOF read each line
-        while(line != null)
+        while(line != null) // TODO: needed?
         {
-          // for the maximum amount of bars
-          for(int barNum = 1; barNum < m_maxBars + 1; ++barNum)
-          {
-            // if the line contains a bar reference
-            // bar reference is in the format 'n*'
-            if(line.Contains(barNum.ToString()))
-            {
-              // assume it is a new bar reference
-              bool isNew = true;
+          int barRef = 0;
 
-              // for the length of the previous bar references
-              for(int prevNum = 0; prevNum < barNums.Count; ++prevNum)
-              {
-                // if this reference is all ready noted
-                if(barNums[prevNum] == barNum)
-                {
-                  isNew = false; // it isn't new
-                }
-              }
-
-              if(isNew) // if a new bar is referenced
-              {
-                if(m_debug) // verbose output
-                {
-                  Console.WriteLine("New bar reference detected.");
-                  Console.WriteLine("Running bar reference total: " + bars + ".");
-                }
-
-                bars++; // increment barcounter
-                barNums.Add(barNum); // store bar number reference
-
-                Bar temp = new Bar(); // create temp bar
-                temp.m_number = barNum; // store the number
-                m_bars.Add(temp); // add the bar to the vector
-              }
-
-              // process each line
-              parseBarLine(barNum, line);
+          // detect bar references
+          try {
+            // format: '*#variable'
+            if(line.Contains("*")) {
+              barRef = line[1];
             }
+          } catch (Exception) {}
+
+          if(barRef > 0)
+          {
+            // assume it is a new bar reference
+            bool isNew = true;
+
+            // guard against double bar references
+            for(int prevNum = 0; prevNum < barNums.Count; ++prevNum)
+            {
+              if(barNums[prevNum] == barRef)
+              {
+                isNew = false; // not new
+              }
+            }
+
+            if(isNew)
+            {
+              if(m_debug)
+              {
+                Console.WriteLine("New bar reference detected.");
+                Console.WriteLine("Running bar reference total: " + bars + ".");
+              }
+
+              bars++; // increment barcounter
+              barNums.Add(barRef); // store bar number reference
+
+              Bar temp = new Bar(); // create temp bar
+              temp.m_number = barRef; // store the number
+              m_bars.Add(temp); // add the bar to the vector
+            }
+
+            // process each line
+            parseBarLine(barRef, line);
           }
 
           line = reader.ReadLine();
@@ -419,15 +425,29 @@ namespace BarUtil
       }
     }
 
+    public BarRc()
+    {
+      // detect old intances and terminate them
+      foreach ( Process p in System.Diagnostics.Process.GetProcessesByName("bar") )
+      {
+        try
+        {
+          Console.WriteLine("p");
+          p.Kill();
+          p.WaitForExit(); // possibly with a timeout
+        }
+        catch (Exception e)
+        {
+          // process was terminating or can't be terminated - deal with it
+        }
+      }
+    }
+
     public static void Main(string[] args)
     {
-      // create class instance (C# weirdness)
       BarRc barrc = new BarRc();
+      barrc.handleArgs(args); // command line arguments
 
-      // handle command line arguments
-      barrc.handleArgs(args);
-
-      // if the config file cannot be found
       if(!File.Exists(barrc.m_barrcPath))
       {
         Console.WriteLine("Cannot locate bar config: " + barrc.m_barrcPath);
@@ -435,8 +455,7 @@ namespace BarUtil
       }
       else // rc located successfully
       {
-        // #1 read/store scriptsrc
-        barrc.parseScriptConfig();
+        barrc.parseScriptConfig(); // #1 read/store scriptsrc
 
         if(barrc.m_debug) // verbose output
         {
@@ -448,14 +467,13 @@ namespace BarUtil
           }
         }
 
-        // #2 load/store bar config
-        barrc.parseBarConfig();
+        barrc.parseBarConfig(); // #2 load/store bar config
 
         if(barrc.m_debug) // verbose output
         {
           Console.WriteLine(barrc.m_bars.Count + " bars detected.");
 
-          for(int i = 0; i < barrc.m_bars.Count; ++i) // for each bar
+          for(int i = 0; i < barrc.m_bars.Count; ++i)
           {
             barrc.m_bars[i].print(); // print config
           }
@@ -464,7 +482,7 @@ namespace BarUtil
         // #3 run scripts
         for(int i = 0; i < barrc.m_scripts.Count; ++i)
         {
-          // Start the process.
+          barrc.m_scripts[i].start();
         }
 
         // #4 thread: run bar(s)
@@ -477,6 +495,7 @@ namespace BarUtil
 
         // #6 wait on all threads
         bool done = false;
+
         while (!done)
         {
           int barsDone = 0;
