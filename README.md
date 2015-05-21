@@ -1,5 +1,7 @@
 'barrc'
 
+Performance is so heinous. Destroy it with fire.
+
 Intends to replace the need for writing bash scripts manually to customise bar.
 
 C# because I wanted a simple introduction to the language prior to my final semester of university.
